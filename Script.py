@@ -4,19 +4,25 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 import time
 
-
 chrome_options = Options()
 chrome_options.add_argument("--user-data-dir=D:/Documents/chrome_data")  # Path to browser session
-chrome_options.add_argument("--profile-directory=Default")   # default profile
-
+chrome_options.add_argument("--profile-directory=Default")  # Default profile
 
 driver = webdriver.Chrome(options=chrome_options)
 driver.get('https://web.whatsapp.com')
 
-
 print("If you're not logged in, scan the QR code to log in to WhatsApp Web.")
 input("Press Enter to continue...")
 
+# User session data
+session = {
+    "step": "greeting",
+    "firstName": "",
+    "lastName": "",
+    "grade": "",
+    "username": "",
+    "password": "",
+}
 
 def click_unread_button():
     try:
@@ -26,23 +32,22 @@ def click_unread_button():
     except Exception as e:
         print(f"Error clicking unread button: {e}")
 
-
 def click_dropdown_button():
     try:
-        unread_button = driver.find_element(By.XPATH, '//*[@id="main"]/header/div[3]/div/div[2]/div/div')
-        unread_button.click()
-        print("Drop button clicked.")
+        dropdown_button = driver.find_element(By.XPATH, '//*[@id="main"]/header/div[3]/div/div[2]/div/div')
+        dropdown_button.click()
+        print("Dropdown button clicked.")
         click_close_button()
     except Exception as e:
-        print(f"Error clicking Drop button: {e}")
+        print(f"Error clicking dropdown button: {e}")
 
 def click_close_button():
     try:
-        unread_button = driver.find_element(By.XPATH, '//*[@id="app"]/div/span[5]/div/ul/div/div/li[6]/div')
-        unread_button.click()
+        close_button = driver.find_element(By.XPATH, '//*[@id="app"]/div/span[5]/div/ul/div/div/li[6]/div')
+        close_button.click()
         print("Close button clicked.")
     except Exception as e:
-        print(f"Error clicking Close button: {e}")
+        print(f"Error clicking close button: {e}")
 
 def find_unread_chats():
     try:
@@ -53,9 +58,7 @@ def find_unread_chats():
             print("No unread chats.")
             return []
 
-
         child_elements = pane_side.find_elements(By.XPATH, './div')
-
 
         print(f"Found {len(child_elements)} chats in total.")
 
@@ -76,7 +79,6 @@ def find_unread_chats():
         print(f"Error in finding unread chats: {e}")
         return []
 
-
 def read_last_message():
     try:
         messages = driver.find_elements(By.XPATH, '//div[contains(@class,"message-in")]')
@@ -86,6 +88,14 @@ def read_last_message():
         print(f"Error reading the last message: {e}")
     return ""
 
+def read_my_last_message():
+    try:
+        messages = driver.find_elements(By.XPATH, '//div[contains(@class,"message-out")]')
+        if messages:
+            return messages[-1].text
+    except Exception as e:
+        print(f"Error reading the last message: {e}")
+    return ""
 
 def send_reply(reply_text):
     try:
@@ -95,6 +105,29 @@ def send_reply(reply_text):
     except Exception as e:
         print(f"Error sending reply: {e}")
 
+
+def process_message(incoming_msg):
+    global session
+    responseMessage = ""
+
+    # Handle dialog steps based on session state
+    if session["step"] == "greeting":
+        responseMessage = "Welcome! What's your first name?"
+        session["step"] = "getFirstName"
+    elif session["step"] == "getFirstName":
+        session["firstName"] = incoming_msg
+        responseMessage = f"Nice to meet you, {session['firstName']}! What's your last name?"
+        session["step"] = "getLastName"
+    elif session["step"] == "getLastName":
+        session["lastName"] = incoming_msg
+        responseMessage = f"Hello, {session['firstName']} {session['lastName']}! Thank you for providing your details."
+        session["step"] = "greeting"  # End the dialog or restart for the next user
+        click_dropdown_button()  # Close chat
+    else:
+        responseMessage = "An error occurred. Please start again."
+        session["step"] = "greeting"
+
+    return responseMessage
 
 try:
     click_unread_button()
@@ -106,23 +139,22 @@ try:
                 chat.click()
                 time.sleep(2)
 
-
                 last_message = read_last_message()
                 print(f"New message: {last_message}")
 
+                my_last_message = read_my_last_message()
+                print(f"My message: {my_last_message}")
 
-                if "hello" in last_message.lower():
-                    send_reply("Hi there! How can I assist you?")
-                    click_dropdown_button()
-                elif "help" in last_message.lower():
-                    send_reply("Sure, let me know your issue.")
-                    click_dropdown_button()
-                else:
-                    send_reply("I am here to help you!")
+                # Process message only if it's relevant
+                if "250104" in last_message.lower():  # Example trigger
+                    reply_message = process_message(last_message)
+                    send_reply(reply_message)
                     click_dropdown_button()
 
         time.sleep(5)
+
 except KeyboardInterrupt:
     print("Stopping the automation...")
+
 finally:
     driver.quit()
